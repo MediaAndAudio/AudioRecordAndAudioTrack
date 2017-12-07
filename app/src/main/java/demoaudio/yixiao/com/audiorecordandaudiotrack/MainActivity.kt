@@ -22,8 +22,13 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private var isStart:Boolean = false
     private var isRecording:Boolean = false
     private var time = 1
-    private val frequency = 11025
+    private val frequency = 44100
     private var filePath:String = ""
+    private val channelConfiguration = AudioFormat.CHANNEL_IN_MONO
+    private val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
+    private val file = File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/reverseme.pcm")
+    private val wavfile = File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/wavreverseme.wav")
+    private val bufferSize:Int = AudioRecord.getMinBufferSize(frequency, channelConfiguration, audioEncoding)
     var permissions = arrayOf(
             Manifest.permission.RECORD_AUDIO,Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
     private var handler = object:Handler(){
@@ -41,6 +46,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         setContentView(R.layout.activity_main)
         start.setOnClickListener(this@MainActivity)
         play.setOnClickListener(this@MainActivity)
+        towav.setOnClickListener(this@MainActivity)
+        playwav.setOnClickListener(this@MainActivity)
 
 
     }
@@ -48,6 +55,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         when(view.id){
             R.id.start -> start()
             R.id.play -> play()
+            R.id.towav -> convertWaveFile()
+            R.id.playwav -> playwav()
         }
     }
     private fun start(){
@@ -159,7 +168,85 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                      */
                     val audioTrack = AudioTrack(AudioManager.STREAM_MUSIC,
                             frequency,
-                            AudioFormat.CHANNEL_OUT_STEREO,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            musicLength * 2,
+                            AudioTrack.MODE_STREAM)
+                    // Start playback
+                    audioTrack.play()
+                    // Write the music buffer to the AudioTrackobject
+                    audioTrack.write(music, 0, musicLength)
+
+                    audioTrack.stop()
+                } catch (t: Throwable) {
+                    Log.e("AudioTrack", "Playback Failed")
+                }
+
+            }
+        }.start()
+
+    }
+    private fun playwav(){
+        showToast("play")
+        Thread(){
+            kotlin.run {
+                // Get the file we want toplayback.
+//                val file = File(Environment.getExternalStorageDirectory().absolutePath + "/reverseme.pcm")
+                // Get the length of the audio stored in the file(16 bit so 2 bytes per short)
+                // and create a short array to store the recordedaudio.
+                if(null == wavfile ||! wavfile.exists()){
+                    showToast("请先录制wav文件")
+                    return@Thread
+                }
+                val musicLength = (wavfile.length() / 2).toInt()
+                val music = ShortArray(musicLength)
+                LogUtil.e("music:"+music)
+
+
+                try {
+                    // Create a DataInputStream to read the audio databack from the saved file.
+                    val fis = FileInputStream(wavfile)
+                    val bis = BufferedInputStream(fis)
+                    val dis = DataInputStream(bis)
+
+                    // Read the file into the musicarray.
+                    var i = 0
+                    while (dis.available() > 0) {
+                        music[i] = dis.readShort()
+                        i++
+                    }
+                    // Close the input streams.
+                    dis.close()
+                    /**
+                    构造方法
+                    - streamType：音频流的类型
+                    AudioManager.STREAM_VOICE_CALL:电话的音频流
+                    AudioManager.STREAM_SYSTEM:系统的音频流
+                    AudioManager.STREAM_RING:闹钟
+                    AudioManager.STREAM_MUSIC:音乐
+                    AudioManager.STREAM_ALARM:警告声
+                    AudioManager.STREAM_NOTIFICATION:通知
+                    - sampleRateInHz：来源的音频的采样频率，单位Hz
+                    - channelConfig：音频声道的配置
+                    AudioFormat.CHANNEL_OUT_MONO:单声道输出(左)
+                    AudioFormat.CHANNEL_OUT_STEREO:立体声输出(左和右)
+                    - audioFormat：音频格式
+                    AudioFormat.ENCODING_INVALID：无效的编码格式
+                    AudioFormat.ENCODING_DEFAULT：默认的编码格式
+                    AudioFormat.ENCODING_PCM_16BIT：每份采样数据为PCM 16bit，保证所有设备支持
+                    AudioFormat.ENCODING_PCM_8BIT：样本数据格式为PCM 8bit，不保证所有设备支持
+                    AudioFormat.ENCODING_PCM_FLOAT：单精度浮点样本
+                    ...
+                    - bufferSizeInBytes：缓冲区的大小
+                    该缓冲区是为了存放需要回放的音频流数据，单位为字节。AudioTrack实例不断的从该缓冲区内读取写入的音频流数据，然后播放出来。它的大小应该是框架层尺寸的数倍。
+                    如果该声轨的创建模式是"AudioTrack.MODE_STATIC"，
+                    - mode：流或者是静态缓存
+                    AudioTrack.MODE_STATIC:创建模式-在音频开始播放之前，音频数据仅仅只会从Java层写入到本地层中一次。即开始播放前一次性写入音频数据。
+                    AudioTrack.MODE_STREAM:创建模式-在音频播放的时候，音频数据会同时会以流的形式写入到本地层中。即一边播放，一边写入数据。(很明显，如果实现一边录音一边播放的话，用这个模式创建声轨)
+                     */
+                    val audioTrack = AudioTrack(AudioManager.STREAM_MUSIC,
+                            frequency,
+                            AudioFormat.CHANNEL_OUT_MONO,
                             AudioFormat.ENCODING_PCM_16BIT,
                             musicLength * 2,
                             AudioTrack.MODE_STREAM)
@@ -182,16 +269,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     }
 
     private fun record() {
-
-        val channelConfiguration = AudioFormat.CHANNEL_IN_MONO
-        val audioEncoding = AudioFormat.ENCODING_PCM_16BIT
-        val file = File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/reverseme.pcm")
-
         // Delete any previousrecording.
         if (file.exists())
             file.delete()
-
-
         // Create the new file.
         try {
             file.createNewFile()
@@ -206,7 +286,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             val dos = DataOutputStream(bos)
 
             // Create a new AudioRecord object to record theaudio.获取我们要创建的AudioRecord实例所需要的缓冲区的最小长度
-            val bufferSize = AudioRecord.getMinBufferSize(frequency, channelConfiguration, audioEncoding)
+//            val bufferSize = AudioRecord.getMinBufferSize(frequency, channelConfiguration, audioEncoding)
             /**
             构造方法 创建AudioRecord实例
             - 由于一些无效的参数或者其他错误会抛出IllegalArgumentException，所以在你构造了一个AudioRecord实例之后，需要立刻调用 getState() 方法来判断这个实例的状态是否可以使用。
@@ -266,4 +346,126 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         }
     }
 
+    // 这里得到可播放的音频文件
+    fun convertWaveFile() {
+        var fis: FileInputStream? = null
+        var out: FileOutputStream? = null
+        var totalAudioLen: Long = 0
+        var totalDataLen = totalAudioLen + 36
+        val longSampleRate = frequency
+        val channels = 1
+        val byteRate = 16 * frequency * channels / 8
+
+        val data = ByteArray(bufferSize)
+        try {
+            if(null == file || !file.exists()){
+                showToast("请先录制")
+                return
+            }
+            fis = FileInputStream(file)
+            if (wavfile.exists())
+                wavfile.delete()
+            try {
+                wavfile.createNewFile()
+            } catch (e: IOException) {
+                throw IllegalStateException("Failed to create " + wavfile.toString())
+            }
+            out = FileOutputStream(wavfile)
+            totalAudioLen = fis.channel.size()
+            //由于不包括RIFF和WAV
+            totalDataLen = totalAudioLen + 36
+            WriteWaveFileHeader(out, totalAudioLen, totalDataLen, longSampleRate.toLong(), channels, byteRate.toLong())
+            while (fis.read(data) !== -1) {
+                out.write(data)
+            }
+            fis.close()
+            out.close()
+            LogUtil.e("chage over")
+            showToast("转换完成")
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace()
+            LogUtil.e("FileNotFoundException")
+            if(null != fis){
+                fis.close()
+            }
+            if(null != out){
+                out.close()
+            }
+        } catch (e: IOException) {
+            LogUtil.e("IOException")
+            e.printStackTrace()
+            if(null != fis){
+                fis.close()
+            }
+            if(null != out){
+                out.close()
+            }
+        }
+
+
+    }
+    /**
+     * 任何一种文件在头部添加相应的头文件才能够确定的表示这种文件的格式，
+     * wave是RIFF文件结构，每一部分为一个chunk，
+     * 其中有RIFF WAVE chunk， FMT Chunk，Fact chunk,Data chunk,
+     * 其中Fact chunk是可以选择的，
+     * */
+    private fun WriteWaveFileHeader(out: FileOutputStream, totalAudioLen: Long, totalDataLen: Long, longSampleRate: Long,
+                                    channels: Int, byteRate: Long) {
+        val header = ByteArray(44)
+        header[0] = 'R'.toByte() // RIFF
+        header[1] = 'I'.toByte()
+        header[2] = 'F'.toByte()
+        header[3] = 'F'.toByte()
+        header[4] = (totalDataLen and 0xff).toByte()//数据大小
+        header[5] = (totalDataLen shr 8 and 0xff).toByte()
+        header[6] = (totalDataLen shr 16 and 0xff).toByte()
+        header[7] = (totalDataLen shr 24 and 0xff).toByte()
+        header[8] = 'W'.toByte()//WAVE
+        header[9] = 'A'.toByte()
+        header[10] = 'V'.toByte()
+        header[11] = 'E'.toByte()
+        //FMT Chunk
+        header[12] = 'f'.toByte()// 'fmt '
+        header[13] = 'm'.toByte()
+        header[14] = 't'.toByte()
+        header[15] = ' '.toByte()//过渡字节
+        //数据大小
+        header[16] = 16 // 4 bytes: size of 'fmt ' chunk
+        header[17] = 0
+        header[18] = 0
+        header[19] = 0
+        //编码方式 10H为PCM编码格式
+        header[20] = 1 // format = 1
+        header[21] = 0
+        //通道数
+        header[22] = channels.toByte()
+        header[23] = 0
+        //采样率，每个通道的播放速度
+        header[24] = (longSampleRate and 0xff).toByte()
+        header[25] = (longSampleRate shr 8 and 0xff).toByte()
+        header[26] = (longSampleRate shr 16 and 0xff).toByte()
+        header[27] = (longSampleRate shr 24 and 0xff).toByte()
+        //音频数据传送速率,采样率*通道数*采样深度/8
+        header[28] = (byteRate and 0xff).toByte()
+        header[29] = (byteRate shr 8 and 0xff).toByte()
+        header[30] = (byteRate shr 16 and 0xff).toByte()
+        header[31] = (byteRate shr 24 and 0xff).toByte()
+        // 确定系统一次要处理多少个这样字节的数据，确定缓冲区，通道数*采样位数
+        header[32] = (1 * 16 / 8).toByte()
+        header[33] = 0
+        //每个样本的数据位数
+        header[34] = 16
+        header[35] = 0
+        //Data chunk
+        header[36] = 'd'.toByte()//data
+        header[37] = 'a'.toByte()
+        header[38] = 't'.toByte()
+        header[39] = 'a'.toByte()
+        header[40] = (totalAudioLen and 0xff).toByte()
+        header[41] = (totalAudioLen shr 8 and 0xff).toByte()
+        header[42] = (totalAudioLen shr 16 and 0xff).toByte()
+        header[43] = (totalAudioLen shr 24 and 0xff).toByte()
+        out.write(header, 0, 44)
+    }
 }

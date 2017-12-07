@@ -21,5 +21,15 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="播放录音"/>
+    <Button
+        android:id="@+id/towav"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="转wav"/>
+    <Button
+        android:id="@+id/playwav"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="播放wav"/>
 
 </LinearLayout>
